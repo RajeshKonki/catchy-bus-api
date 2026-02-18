@@ -1,0 +1,117 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  fullName  String?
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model College {
+  id            String   @id @default(uuid())
+  name          String
+  address       String
+  lat           Float
+  lng           Float
+  phone         String
+  email         String
+  loginEmail    String   @unique
+  loginPassword String
+  availability  Boolean  @default(true)
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  routes        Route[]
+  buses         Bus[]
+  drivers       Driver[]
+  students      Student[]
+}
+
+model Route {
+  id          String   @id @default(uuid())
+  name        String
+  startPoint  String
+  endPoint    String
+  distance    Float?
+  duration    Int?
+  stops       Json?
+  status      Status   @default(ACTIVE)
+  collegeId   String
+  college     College  @relation(fields: [collegeId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  buses       Bus[]
+}
+
+model Bus {
+  id          String   @id @default(uuid())
+  busNumber   String   @unique
+  capacity    Int
+  title       String?
+  description String?
+  status      Status   @default(ACTIVE)
+  collegeId   String
+  college     College  @relation(fields: [collegeId], references: [id])
+  routeId     String?
+  route       Route?   @relation(fields: [routeId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  driver      Driver?
+  students    Student[]
+}
+
+model Driver {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  licenseNumber String
+  phone         String
+  status        Status   @default(ACTIVE)
+  photoUrl      String?
+  collegeId     String
+  college       College  @relation(fields: [collegeId], references: [id])
+  busId         String?  @unique
+  bus           Bus?     @relation(fields: [busId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Student {
+  id                String   @id @default(uuid())
+  fullName          String
+  phone             String
+  profilePictureUrl String?
+  collegeId         String
+  college           College  @relation(fields: [collegeId], references: [id])
+  busId             String?
+  bus               Bus?     @relation(fields: [busId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  type        String
+  description String
+  userId      String?
+  timestamp   DateTime @default(now())
+}
