@@ -1,15 +1,10 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-enum Status {
-  ACTIVE
-  INACTIVE
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Admin {
@@ -23,89 +18,171 @@ model Admin {
 }
 
 model College {
-  id            String   @id @default(uuid())
-  name          String
-  address       String
-  lat           Float
-  lng           Float
-  phone         String
-  email         String
-  loginEmail    String   @unique
-  loginPassword String
-  availability  Boolean  @default(true)
-  imageUrl      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  routes        Route[]
-  buses         Bus[]
-  drivers       Driver[]
-  students      Student[]
+  id                String    @id @default(uuid())
+  name              String
+  address           String
+  lat               Float
+  lng               Float
+  phone             String
+  email             String
+  loginEmail        String    @unique
+  loginPassword     String
+  availability      Boolean   @default(true)
+  imageUrl          String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  contactPerson     String?
+  subscriptionEnd   DateTime?
+  subscriptionStart DateTime?
+  subscriptionType  Int?
+  buses             Bus[]
+  drivers           Driver[]
+  routes            Route[]
+  students          Student[]
 }
 
 model Route {
-  id          String   @id @default(uuid())
-  name        String
-  startPoint  String
-  endPoint    String
-  distance    Float?
-  duration    Int?
-  stops       Json?
-  status      Status   @default(ACTIVE)
-  collegeId   String
-  college     College  @relation(fields: [collegeId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  startPoint   String
+  endPoint     String
+  distance     Float?
+  status       Status   @default(ACTIVE)
+  collegeId    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  duration     Int?
+  stops        Json?
+  endAddress   String?
+  endLat       Float?
+  endLng       Float?
+  startAddress String?
+  startLat     Float?
+  startLng     Float?
+  endTime      String?
+  startTime    String?
+  buses        Bus[]
+  trips        Trip[]
+  driverRoutes DriverRoute[]
+  busRoutes    BusRoute[]
+  college      College  @relation(fields: [collegeId], references: [id])
+}
 
-  buses       Bus[]
+model BusRoute {
+  busId   String
+  routeId String
+  bus     Bus    @relation(fields: [busId], references: [id])
+  route   Route  @relation(fields: [routeId], references: [id])
+
+  @@id([busId, routeId])
 }
 
 model Bus {
-  id          String   @id @default(uuid())
-  busNumber   String   @unique
+  id          String    @id @default(uuid())
+  busNumber   String    @unique
   capacity    Int
-  title       String?
-  description String?
-  status      Status   @default(ACTIVE)
+  status      Status    @default(ACTIVE)
   collegeId   String
-  college     College  @relation(fields: [collegeId], references: [id])
   routeId     String?
-  route       Route?   @relation(fields: [routeId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  description String?
+  title       String?
+  college     College   @relation(fields: [collegeId], references: [id])
+  route       Route?    @relation(fields: [routeId], references: [id])
+  busRoutes   BusRoute[]
   driver      Driver?
   students    Student[]
+  trips       Trip[]
+}
+
+model Trip {
+  id          String    @id @default(uuid())
+  busId       String
+  routeId     String?
+  status      String    @default("STARTED")
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  passedStops Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bus         Bus       @relation(fields: [busId], references: [id])
+  route       Route?    @relation(fields: [routeId], references: [id])
+}
+
+model DriverRoute {
+  id        String   @id @default(uuid())
+  driverId  String
+  routeId   String
+  createdAt DateTime @default(now())
+  driver    Driver   @relation(fields: [driverId], references: [id])
+  route     Route    @relation(fields: [routeId], references: [id])
+
+  @@unique([driverId, routeId])
 }
 
 model Driver {
   id            String   @id @default(uuid())
   name          String
-  email         String   @unique
-  password      String
   licenseNumber String
   phone         String
   status        Status   @default(ACTIVE)
   photoUrl      String?
   collegeId     String
-  college       College  @relation(fields: [collegeId], references: [id])
   busId         String?  @unique
-  bus           Bus?     @relation(fields: [busId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  email         String   @unique
+  password      String
+  fcmToken      String?
+  bus           Bus?     @relation(fields: [busId], references: [id])
+  college       College  @relation(fields: [collegeId], references: [id])
+  driverRoutes  DriverRoute[]
 }
 
 model Student {
-  id                String   @id @default(uuid())
-  fullName          String
-  phone             String
-  profilePictureUrl String?
-  collegeId         String
-  college           College  @relation(fields: [collegeId], references: [id])
-  busId             String?
-  bus               Bus?     @relation(fields: [busId], references: [id])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                   String         @id @default(uuid())
+  phone                String
+  profilePictureUrl    String?
+  collegeId            String
+  busId                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  email                String?        @unique
+  name                 String
+  status               Status         @default(ACTIVE)
+  password             String?
+  pickupStop           String?
+  fcmToken             String?
+  notificationSettings Json?
+  studentId            String?
+  attendances          Attendance[]
+  notifications        Notification[]
+  bus                  Bus?           @relation(fields: [busId], references: [id])
+  college              College        @relation(fields: [collegeId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  title       String
+  body        String
+  data        Json?
+  studentId   String
+  phoneNumber String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     Student  @relation(fields: [studentId], references: [id])
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  studentId String
+  status    String   @default("PRESENT")
+  stopName  String?
+  busId     String
+  timestamp DateTime @default(now())
+  student   Student  @relation(fields: [studentId], references: [id])
 }
 
 model Activity {
@@ -114,4 +191,20 @@ model Activity {
   description String
   userId      String?
   timestamp   DateTime @default(now())
+}
+
+model Banner {
+  id        String   @id @default(uuid())
+  title     String?
+  imageUrl  String
+  link      String?
+  status    Status   @default(ACTIVE)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
 }

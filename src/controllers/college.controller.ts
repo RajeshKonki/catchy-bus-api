@@ -8,7 +8,10 @@ const activityService = new ActivityService();
 export class CollegeController {
     async getAll(req: Request, res: Response) {
         try {
-            const colleges = await collegeService.getAllColleges();
+            const user = (req as any).user;
+            const search = req.query['search'] as string;
+            const collegeId = user?.type === 'college' ? user.id : undefined;
+            const colleges = await collegeService.getAllColleges(collegeId, search);
             res.json(colleges);
         } catch (error: any) {
             res.status(500).json({ message: error.message });

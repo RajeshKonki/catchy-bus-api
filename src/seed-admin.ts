@@ -4,42 +4,48 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-    const email = 'rajesh.k@gmail.com';
-    const password = 'Rajesh@123';
-    const fullName = 'Super Admin';
-    const role = 'super_admin';
+    const admins = [
+        {
+            email: 'admin@catchybus.com',
+            password: 'Rajesh@123',
+            fullName: 'Super Admin',
+            role: 'superadmin'
+        },
+        {
+            email: 'shaiktowsiq@gmail.com',
+            password: 'Admin@123',
+            fullName: 'Towsiq Super Admin',
+            role: 'superadmin'
+        }
+    ];
 
-    console.log(`🚀 Creating admin user: ${email}...`);
+    console.log('🚀 Seeding super admins...');
 
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const admin = await prisma.admin.upsert({
-            where: { email },
-            update: {
-                password: hashedPassword,
-                fullName,
-                role,
-            },
-            create: {
-                email,
-                password: hashedPassword,
-                fullName,
-                role,
-            },
-        });
-
-        console.log('✅ Admin user created/updated successfully:');
-        console.log({
-            id: admin.id,
-            email: admin.email,
-            role: admin.role,
-        });
-    } catch (error) {
-        console.error('❌ Error creating admin user:', error);
-    } finally {
-        await prisma.$disconnect();
+    for (const adminData of admins) {
+        try {
+            const hashedPassword = await bcrypt.hash(adminData.password, 10);
+            const admin = await prisma.admin.upsert({
+                where: { email: adminData.email },
+                update: {
+                    password: hashedPassword,
+                    fullName: adminData.fullName,
+                    role: adminData.role,
+                },
+                create: {
+                    email: adminData.email,
+                    password: hashedPassword,
+                    fullName: adminData.fullName,
+                    role: adminData.role,
+                },
+            });
+            console.log(`✅ Admin ${admin.email} created/updated successfully.`);
+        } catch (error) {
+            console.error(`❌ Error creating admin ${adminData.email}:`, error);
+        }
     }
+
+    console.log('✨ Seeding completed.');
+    await prisma.$disconnect();
 }
 
 main();

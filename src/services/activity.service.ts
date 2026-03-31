@@ -12,8 +12,10 @@ export class ActivityService {
         });
     }
 
-    async getRecentActivities(limit: number = 10) {
+    async getRecentActivities(limit: number = 10, userId?: string) {
+        const where = userId ? { userId } : {};
         return await prisma.activity.findMany({
+            where,
             orderBy: { timestamp: 'desc' },
             take: limit
         });

@@ -3,3 +3,5 @@ dist
 .env
 prisma/migrations
 *.log
+.DS_Store
+src/config/serviceAccountKey.json
