@@ -178,7 +178,7 @@ export class BusService {
     }
 
     private sanitizeBusData(data: any) {
-        const { busNumber, capacity, title, description, status, collegeId, routeId } = data;
+        const { busNumber, capacity, title, description, status, collegeId, routeId, imageUrl } = data;
         return {
             busNumber,
             capacity: Number(capacity),
@@ -186,7 +186,8 @@ export class BusService {
             description,
             status: status ? status.toUpperCase() : 'ACTIVE',
             collegeId,
-            routeId: routeId || null
+            routeId: routeId || null,
+            imageUrl: imageUrl || null
         };
     }
 

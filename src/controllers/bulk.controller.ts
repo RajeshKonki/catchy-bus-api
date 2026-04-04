@@ -37,7 +37,7 @@ export class BulkController {
     async getSample(req: Request, res: Response) {
         try {
             const { module } = req.params as { module: string };
-            const csv = bulkService.getSampleFormat(module);
+            const csv = await bulkService.getSampleFormat(module);
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Content-Disposition', `attachment; filename=${module}_sample.csv`);
             res.status(200).send(csv);

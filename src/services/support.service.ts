@@ -8,6 +8,7 @@ export class SupportService {
         let senderEmail = guestEmail || 'Not Provided';
         let senderRole = type || 'Guest';
         let targetCollegeEmail: string | null = null;
+        let targetCollegeId: string | null = null;
         let collegeName = 'N/A';
 
         if (userId && type) {
@@ -30,6 +31,7 @@ export class SupportService {
                     senderRole = 'Driver';
                     collegeName = driver.college?.name || 'N/A';
                     targetCollegeEmail = driver.college?.email || null;
+                    targetCollegeId = driver.collegeId;
                 }
             } else if (type === 'student' || type === 'parent') {
                 const student = await prisma.student.findUnique({
@@ -42,6 +44,7 @@ export class SupportService {
                     senderRole = type === 'student' ? 'Student' : 'Parent';
                     collegeName = student.college?.name || 'N/A';
                     targetCollegeEmail = student.college?.email || null;
+                    targetCollegeId = student.collegeId;
                 }
             }
         }
@@ -92,6 +95,20 @@ export class SupportService {
                     html
                 );
             }
+
+            // Also create a HelpdeskQuery entry for the Admin Portal Notifications
+            await prisma.helpdeskQuery.create({
+                data: {
+                    subject,
+                    message: query,
+                    senderId: userId || 'GUEST',
+                    senderType: senderRole.toUpperCase(),
+                    senderName: senderName,
+                    targetId: targetCollegeId, // null for colleges (goes to admin), collegeId for drivers/students (goes to college)
+                    priority: 'MEDIUM'
+                }
+            });
+
             return { success: true, message: 'Support query sent successfully to college and admin' };
         } catch (error) {
             console.error('Error sending support email:', error);

@@ -231,13 +231,14 @@ export class AuthService {
         if (type === 'admin') {
             const admin = await prisma.admin.findUnique({
                 where: { id },
-                select: { id: true, email: true, fullName: true, role: true }
+                select: { id: true, email: true, fullName: true, role: true, photoUrl: true }
             });
             if (admin) {
                 return {
                     ...admin,
                     fullName: admin.fullName || '',
-                    name: admin.fullName || ''
+                    name: admin.fullName || '',
+                    photoUrl: admin.photoUrl || ''
                 };
             }
         } else if (type === 'college') {
@@ -325,26 +326,48 @@ export class AuthService {
     }
     async updateMe(id: string, type: string, data: any) {
         if (type === 'admin') {
-            return await prisma.admin.update({
+            let photoUrl = data.photoUrl || data.avatar;
+            if (photoUrl && photoUrl.startsWith('data:image')) {
+                photoUrl = await s3Service.uploadImage(photoUrl, 'admins');
+            }
+
+            const updatedAdmin = await prisma.admin.update({
                 where: { id },
                 data: {
                     fullName: data.fullName,
-                    email: data.email
+                    email: data.email,
+                    ...(photoUrl ? { photoUrl } : {})
                 },
-                select: { id: true, email: true, fullName: true, role: true }
+                select: { id: true, email: true, fullName: true, role: true, photoUrl: true }
             });
+            return {
+                ...updatedAdmin,
+                name: updatedAdmin.fullName || ''
+            };
         } else if (type === 'college') {
-            return await prisma.college.update({
+            let imageUrl = data.imageUrl || data.avatar;
+            if (imageUrl && imageUrl.startsWith('data:image')) {
+                imageUrl = await s3Service.uploadImage(imageUrl, 'colleges');
+            }
+
+            const updatedCollege = await prisma.college.update({
                 where: { id },
                 data: {
                     name: data.name,
-                    email: data.email
+                    email: data.email,
+                    ...(imageUrl ? { imageUrl } : {})
                 },
                 select: {
                     id: true, name: true, email: true, loginEmail: true,
+                    imageUrl: true, address: true,
                     subscriptionStart: true, subscriptionType: true, subscriptionEnd: true
                 }
             });
+            return {
+                ...updatedCollege,
+                collegeName: updatedCollege.name || '',
+                collegeLogo: updatedCollege.imageUrl || ''
+            };
         } else if (type === 'driver') {
             let photoUrl = data.profilePictureUrl || data.photoUrl;
             if (photoUrl) {

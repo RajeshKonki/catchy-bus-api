@@ -14,6 +14,7 @@ router.post('/student/login', authController.studentLogin);
 router.post('/parent/login', authController.parentLogin);
 router.post('/driver/login', authController.driverLogin);
 router.get('/me', authenticateJWT, requireActiveSubscription, authController.getMe);
+router.put('/update-profile', authenticateJWT, authController.updateProfile);
 router.post('/fcm-token', authenticateJWT, requireActiveSubscription, authController.updateFcmToken);
 
 export default router;

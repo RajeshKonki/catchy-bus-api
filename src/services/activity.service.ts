@@ -20,4 +20,11 @@ export class ActivityService {
             take: limit
         });
     }
+
+    async clearActivities(userId?: string) {
+        const where = userId ? { userId } : {};
+        return await prisma.activity.deleteMany({
+            where
+        });
+    }
 }

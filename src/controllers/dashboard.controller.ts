@@ -57,4 +57,16 @@ export class DashboardController {
             res.status(500).json({ message: error.message });
         }
     }
+
+    async clearActivities(req: Request, res: Response) {
+        try {
+            const user = (req as any).user;
+            const userId = user?.type === 'college' ? user.id : undefined;
+            await activityService.clearActivities(userId);
+            res.json({ success: true, message: 'Activities cleared successfully' });
+        } catch (error: any) {
+            console.error('Error clearing activities:', error);
+            res.status(500).json({ message: error.message });
+        }
+    }
 }

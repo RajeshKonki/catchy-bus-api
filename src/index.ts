@@ -53,6 +53,7 @@ import bulkRoutes from './routes/bulk.routes';
 import supportRoutes from './routes/support.routes';
 import bannerRoutes from './routes/banner.routes';
 import notificationRoutes from './routes/notification.routes';
+import helpdeskRoutes from './routes/helpdesk.routes';
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -66,6 +67,7 @@ app.use('/api/bulk', bulkRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/helpdesk', helpdeskRoutes);
 
 // Socket.io logic
 io.on('connection', (socket) => {

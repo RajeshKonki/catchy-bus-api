@@ -9,5 +9,6 @@ const dashboardController = new DashboardController();
 router.get('/stats', authenticateJWT, requireActiveSubscription, dashboardController.getSummary);
 router.get('/activities', authenticateJWT, requireActiveSubscription, dashboardController.getActivities);
 router.post('/activities', authenticateJWT, requireActiveSubscription, dashboardController.createActivity);
+router.delete('/activities/clear', authenticateJWT, requireActiveSubscription, dashboardController.clearActivities);
 
 export default router;
