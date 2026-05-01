@@ -5,27 +5,25 @@ const bannerService = new BannerService();
 
 export class BannerController {
     async getAllBanners(req: Request, res: Response) {
-        console.log('--- FETCHING ALL BANNERS ---');
-        console.log('User role from token:', (req as any).user?.role || (req as any).user?.type);
         try {
+            const user = (req as any).user;
             const status = req.query.status as string;
-            const result = await (bannerService as any).getAllBanners(status);
-            console.log('Found banners count:', result.length);
+            // College admin only sees their own banners
+            const collegeId = user?.type === 'college' ? user.id : undefined;
+            const result = await bannerService.getAllBanners(status, collegeId);
             res.json(result);
         } catch (error: any) {
-            console.error('Error fetching banners:', error);
             res.status(500).json({ message: error.message });
         }
     }
 
     async getActiveBanners(req: Request, res: Response) {
-        console.log('--- FETCHING ACTIVE BANNERS ---');
         try {
-            const result = await bannerService.getActiveBanners();
-            console.log('Found active banners count:', result.length);
+            // Mobile passes collegeId as query param so students only see their college banners
+            const collegeId = req.query.collegeId as string | undefined;
+            const result = await bannerService.getActiveBanners(collegeId);
             res.json(result);
         } catch (error: any) {
-            console.error('Error fetching active banners:', error);
             res.status(500).json({ message: error.message });
         }
     }
@@ -42,7 +40,10 @@ export class BannerController {
 
     async createBanner(req: Request, res: Response) {
         try {
-            const result = await bannerService.createBanner(req.body);
+            const user = (req as any).user;
+            // College admin creates banners scoped to their college
+            const collegeId = user?.type === 'college' ? user.id : req.body.collegeId || null;
+            const result = await bannerService.createBanner(req.body, collegeId);
             res.status(201).json(result);
         } catch (error: any) {
             res.status(500).json({ message: error.message });

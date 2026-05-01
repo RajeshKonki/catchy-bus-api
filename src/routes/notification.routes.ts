@@ -15,4 +15,10 @@ router.patch('/:id/read', authenticateJWT, requireActiveSubscription, notificati
 // Mark all as read
 router.patch('/read-all', authenticateJWT, requireActiveSubscription, notificationController.markAllAsRead);
 
+// Delete a notification
+router.delete('/:id', authenticateJWT, requireActiveSubscription, notificationController.deleteNotification);
+
+// Delete all notifications
+router.delete('/all', authenticateJWT, requireActiveSubscription, notificationController.deleteAllNotifications);
+
 export default router;

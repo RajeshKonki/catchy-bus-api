@@ -208,6 +208,8 @@ export class AuthService {
                 busId: primaryStudent.busId || '',
                 busNumber: primaryStudent.bus?.busNumber || '',
                 studentId: primaryStudent.studentId || '',
+                department: (primaryStudent as any).department || '',
+                year: (primaryStudent as any).year || '',
                 isMultiAccount: students.length > 1,
                 accounts: students.map(s => ({
                     id: s.id,
@@ -218,6 +220,8 @@ export class AuthService {
                     busId: s.busId || '',
                     busNumber: s.bus?.busNumber || '',
                     studentId: s.studentId || '',
+                    department: (s as any).department || '',
+                    year: (s as any).year || '',
                     profilePictureUrl: s.profilePictureUrl || '',
                     collegeImageUrl: s.college?.imageUrl || ''
                 }))
@@ -304,6 +308,8 @@ export class AuthService {
                     busId: student.busId || '',
                     busNumber: student.bus?.busNumber || '',
                     studentId: student.studentId || '',
+                    department: (student as any).department || '',
+                    year: (student as any).year || '',
                     profilePictureUrl: student.profilePictureUrl || '',
                     collegeImageUrl: student.college?.imageUrl || '',
                     isMultiAccount: allStudents.length > 1,
@@ -316,6 +322,8 @@ export class AuthService {
                         busId: s.busId || '',
                         busNumber: s.bus?.busNumber || '',
                         studentId: s.studentId || '',
+                        department: (s as any).department || '',
+                        year: (s as any).year || '',
                         profilePictureUrl: s.profilePictureUrl || '',
                         collegeImageUrl: s.college?.imageUrl || ''
                     }))

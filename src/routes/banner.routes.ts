@@ -5,16 +5,16 @@ import { authenticateJWT, authorizeRoles } from '../middlewares/auth.middleware'
 const router = Router();
 const bannerController = new BannerController();
 
-// Public route for mobile app
+// Public route for mobile app — accepts optional ?collegeId= to scope results
 router.get('/active', bannerController.getActiveBanners);
 
-// Protected routes (Only super admin)
-const adminRoles = ['admin', 'superadmin', 'super_admin'];
+// Both super admin and college admins can manage banners
+const allowedRoles = ['admin', 'superadmin', 'super_admin', 'college'];
 
-router.get('/', authenticateJWT, authorizeRoles(adminRoles), bannerController.getAllBanners);
-router.get('/:id', authenticateJWT, authorizeRoles(adminRoles), bannerController.getBannerById);
-router.post('/', authenticateJWT, authorizeRoles(adminRoles), bannerController.createBanner);
-router.put('/:id', authenticateJWT, authorizeRoles(adminRoles), bannerController.updateBanner);
-router.delete('/:id', authenticateJWT, authorizeRoles(adminRoles), bannerController.deleteBanner);
+router.get('/', authenticateJWT, authorizeRoles(allowedRoles), bannerController.getAllBanners);
+router.get('/:id', authenticateJWT, authorizeRoles(allowedRoles), bannerController.getBannerById);
+router.post('/', authenticateJWT, authorizeRoles(allowedRoles), bannerController.createBanner);
+router.put('/:id', authenticateJWT, authorizeRoles(allowedRoles), bannerController.updateBanner);
+router.delete('/:id', authenticateJWT, authorizeRoles(allowedRoles), bannerController.deleteBanner);
 
 export default router;

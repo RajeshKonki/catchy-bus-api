@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { BulkService } from '../services/bulk.service';
+import * as XLSX from 'xlsx';
 
 const bulkService = new BulkService();
 
@@ -23,10 +24,35 @@ export class BulkController {
             const user = (req as any).user;
             const collegeId = user?.type === 'college' ? user.id : undefined;
             const { module } = req.params as { module: string };
+
             if (!req.file) {
                 return res.status(400).json({ message: 'No file uploaded' });
             }
-            const csvContent = req.file.buffer.toString('utf-8');
+
+            const filename = (req.file.originalname ?? '').toLowerCase();
+            const mimetype = req.file.mimetype ?? '';
+            const isXlsx =
+                mimetype.includes('spreadsheetml') ||
+                mimetype.includes('excel') ||
+                filename.endsWith('.xlsx') ||
+                filename.endsWith('.xls');
+
+            let csvContent: string;
+
+            if (isXlsx) {
+                // Parse the Excel buffer and convert the first sheet to CSV
+                const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+                const firstSheetName = workbook.SheetNames[0];
+                if (!firstSheetName) {
+                    return res.status(400).json({ message: 'Excel file has no sheets' });
+                }
+                const sheet = workbook.Sheets[firstSheetName];
+                csvContent = XLSX.utils.sheet_to_csv(sheet, { forceQuotes: false });
+            } else {
+                // Treat as plain CSV (UTF-8)
+                csvContent = req.file.buffer.toString('utf-8');
+            }
+
             const results = await bulkService.importData(module, csvContent, collegeId);
             res.json(results);
         } catch (error: any) {

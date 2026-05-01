@@ -89,4 +89,52 @@ export class NotificationController {
             return res.status(500).json({ success: false, message: 'Internal server error' });
         }
     }
+
+    /**
+     * Delete a notification
+     */
+    async deleteNotification(req: Request, res: Response) {
+        try {
+            const id = req.params.id as string;
+            const user = (req as any).user;
+
+            await prisma.notification.delete({
+                where: { 
+                    id, 
+                    studentId: user.id 
+                }
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Notification deleted'
+            });
+        } catch (error) {
+            console.error('[NotificationController] Error deleting notification:', error);
+            return res.status(500).json({ success: false, message: 'Internal server error' });
+        }
+    }
+
+    /**
+     * Delete all notifications
+     */
+    async deleteAllNotifications(req: Request, res: Response) {
+        try {
+            const user = (req as any).user;
+
+            await prisma.notification.deleteMany({
+                where: { 
+                    studentId: user.id
+                }
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'All notifications deleted'
+            });
+        } catch (error) {
+            console.error('[NotificationController] Error deleting all notifications:', error);
+            return res.status(500).json({ success: false, message: 'Internal server error' });
+        }
+    }
 }

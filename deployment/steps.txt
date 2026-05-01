@@ -1,0 +1,4 @@
+ssh -i "catches.pem" ec2-user@ec2-16-112-183-112.ap-south-2.compute.amazonaws.com
+
+
+scp -i "catches.pem" -r /Users/cds/Projects/bustrackingapp/api-server  ec2-user@ec2-16-112-183-112.ap-south-2.compute.amazonaws.com:/home/ec2-user/ 

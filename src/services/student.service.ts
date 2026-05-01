@@ -21,7 +21,9 @@ export class StudentService {
             where.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } }
+                { phone: { contains: search, mode: 'insensitive' } },
+                { department: { contains: search, mode: 'insensitive' } },
+                { year: { contains: search, mode: 'insensitive' } }
             ];
         }
 
@@ -60,7 +62,7 @@ export class StudentService {
     }
 
     private async sanitizeStudentData(data: any, isUpdate: boolean = false) {
-        const { studentId, name, email, phone, collegeId, busId, status, pickupStop, notificationSettings } = data;
+        const { studentId, name, email, phone, collegeId, busId, status, pickupStop, notificationSettings, department, year } = data;
         let profilePictureUrl = data.profilePictureUrl;
 
 
@@ -78,6 +80,8 @@ export class StudentService {
             profilePictureUrl: profilePictureUrl || null,
             pickupStop: pickupStop || null,
             notificationSettings: notificationSettings || undefined,
+            department: department || null,
+            year: year || null,
         };
 
         if (collegeId) {

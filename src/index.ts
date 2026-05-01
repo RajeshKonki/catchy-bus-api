@@ -110,6 +110,7 @@ io.on('connection', (socket) => {
                 currentLocation,
                 nextStop,
                 isTripActive,
+                isReverse: lastLocation.isReverse ?? false,
                 timestamp: Date.now(),
                 isLastKnown: true
             });
@@ -131,6 +132,7 @@ io.on('connection', (socket) => {
                 socket.emit('trip_status_update', {
                     busId,
                     isTripActive,
+                    isReverse: bus?.trips?.[0]?.isReverse ?? false,
                     status: isTripActive ? 'STARTED' : 'NOT_STARTED',
                     timestamp: Date.now()
                 });
@@ -181,17 +183,34 @@ io.on('connection', (socket) => {
                     const lastIndex = routeStops.findIndex(s => 
                         (typeof s === 'string' ? s : s.name) === currentLocation
                     );
-                    if (lastIndex !== -1 && lastIndex < routeStops.length - 1) {
-                        const next = routeStops[lastIndex + 1];
-                        nextStop = typeof next === 'string' ? next : next.name;
+                    if (lastIndex !== -1) {
+                        if (trip.isReverse) {
+                            // Return trip: next stop is at a lower index
+                            if (lastIndex > 0) {
+                                const next = routeStops[lastIndex - 1];
+                                nextStop = typeof next === 'string' ? next : next.name;
+                            } else {
+                                nextStop = 'Depot Reached';
+                            }
+                        } else {
+                            // Normal trip: next stop is at a higher index
+                            if (lastIndex < routeStops.length - 1) {
+                                const next = routeStops[lastIndex + 1];
+                                nextStop = typeof next === 'string' ? next : next.name;
+                            } else {
+                                nextStop = 'Terminus Reached';
+                            }
+                        }
                     } else {
-                        nextStop = 'Terminus Reached';
+                        nextStop = 'Calculating...';
                     }
                 } else {
-                    currentLocation = bus.route?.startPoint || 'Starting Point';
+                    currentLocation = trip.isReverse 
+                        ? (bus.route?.endPoint || 'Starting Point (Return)') 
+                        : (bus.route?.startPoint || 'Starting Point');
                     if (routeStops.length > 0) {
-                        const first = routeStops[0];
-                        nextStop = typeof first === 'string' ? first : first.name;
+                        const next = trip.isReverse ? routeStops[routeStops.length - 1] : routeStops[0];
+                        nextStop = typeof next === 'string' ? next : next.name;
                     }
                 }
 
@@ -247,13 +266,25 @@ io.on('connection', (socket) => {
 
                     if (closestStop) {
                         const idx = routeStops.findIndex(s => (typeof s === 'string' ? s : s.name) === closestStop);
-                        if (idx !== -1 && idx < routeStops.length - 1) {
-                            const next = routeStops[idx + 1];
-                            nextStop = typeof next === 'string' ? next : next.name;
-                        } else if (idx === routeStops.length - 1) {
-                            nextStop = 'Terminus';
+                        if (idx !== -1) {
+                            if (trip.isReverse) {
+                                if (idx > 0) {
+                                    const next = routeStops[idx - 1];
+                                    nextStop = typeof next === 'string' ? next : next.name;
+                                } else {
+                                    nextStop = 'Depot Reached';
+                                }
+                            } else {
+                                if (idx < routeStops.length - 1) {
+                                    const next = routeStops[idx + 1];
+                                    nextStop = typeof next === 'string' ? next : next.name;
+                                } else {
+                                    nextStop = 'Terminus Reached';
+                                }
+                            }
                         }
                         
+                        // If very close to the stop, show stop name, otherwise show "In Transit"
                         if (minDistance < 0.2) {
                             currentLocation = closestStop;
                         } else {
@@ -283,6 +314,7 @@ io.on('connection', (socket) => {
                     currentLocation,
                     nextStop,
                     isTripActive: true,
+                    isReverse: trip.isReverse,
                 });
 
                 // Broadcast to all students in the room (include isTripActive so student UI stays in sync)
@@ -294,6 +326,7 @@ io.on('connection', (socket) => {
                     isOnTime,
                     delayMinutes,
                     isTripActive: true,
+                    isReverse: trip.isReverse,
                     timestamp: Date.now()
                 });
                 console.log(`📍 Location update for ${busId}:`, normalizedLocation, `[${currentLocation} -> ${nextStop}] ${isOnTime ? 'On Time' : 'Delayed ' + delayMinutes + 'm'}`);
@@ -312,64 +345,102 @@ io.on('connection', (socket) => {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    socket.on('start_trip', async (payload: string | { busNumber: string; routeId?: string; driverLat?: number; driverLng?: number }) => {
+    socket.on('start_trip', async (payload: string | { busNumber: string; routeId?: string; driverLat?: number; driverLng?: number; isReverse?: boolean }) => {
         try {
             const busNumber  = typeof payload === 'string' ? payload : payload.busNumber;
             const routeId    = typeof payload === 'string' ? undefined : payload.routeId;
             const driverLat  = typeof payload === 'string' ? undefined : payload.driverLat;
             const driverLng  = typeof payload === 'string' ? undefined : payload.driverLng;
+            const isReverse  = typeof payload === 'string' ? false : (payload.isReverse === true || (payload.isReverse as any) === 'true');
 
             const bus: any = await (prisma.bus as any).findUnique({ where: { busNumber } });
             if (!bus) throw new Error('Bus not found');
 
-            // ── Geofence: driver must be within 1 km of route start ──
+            // ── Geofence check ──────────────────────────────────────────────
+            // Normal trip:  driver must be within 1 km of route START point.
+            // Reverse trip: driver must be within 1 km of route END point
+            //               (because the return journey begins at the destination).
             if (routeId && driverLat != null && driverLng != null) {
                 const route: any = await (prisma as any).route.findUnique({ where: { id: routeId } });
-                if (route?.startLat && route?.startLng) {
-                    const dist = haversineMetres(driverLat, driverLng, route.startLat, route.startLng);
-                    if (dist > 1000) {
-                        socket.emit('trip_start_error', {
-                            code: 'TOO_FAR_FROM_START',
-                            message: `You are ${Math.round(dist)}m from the start point. Move within 1km to start.`,
-                            distanceMetres: Math.round(dist)
-                        });
-                        return;
+                if (route) {
+                    const targetLat = isReverse ? route.endLat : route.startLat;
+                    const targetLng = isReverse ? route.endLng : route.startLng;
+
+                    if (targetLat && targetLng) {
+                        const dist = haversineMetres(driverLat, driverLng, targetLat, targetLng);
+                        if (dist > 1000) {
+                            socket.emit('trip_start_error', {
+                                code: isReverse ? 'TOO_FAR_FROM_END' : 'TOO_FAR_FROM_START',
+                                message: `You are ${Math.round(dist)}m from the ${isReverse ? 'return start' : 'start'} point. Move within 1km to start.`,
+                                distanceMetres: Math.round(dist)
+                            });
+                            return;
+                        }
                     }
                 }
             }
 
-            // Auto-close stale trips (> 12 hours old)
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+            // Close any existing active trips for this bus to ensure a fresh start
             await (prisma as any).trip.updateMany({
-                where: { busId: bus.id, status: 'STARTED', startTime: { lt: twelveHoursAgo } },
+                where: { busId: bus.id, status: 'STARTED' },
                 data: { status: 'COMPLETED', endTime: new Date() }
             });
 
-            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            let trip: any = await (prisma as any).trip.findFirst({
-                where: { busId: bus.id, status: 'STARTED', startTime: { gte: twentyFourHoursAgo } },
-                orderBy: { startTime: 'desc' }
+            console.log(`🚀 Starting trip for bus ${busNumber}. routeId: ${routeId}, isReverse: ${isReverse}`);
+            // Create a brand new trip
+            let trip = await (prisma as any).trip.create({
+                data: {
+                    busId: bus.id,
+                    routeId: routeId || null,
+                    status: 'STARTED',
+                    passedStops: [],
+                    isReverse: isReverse,
+                }
             });
 
-            if (!trip) {
-                trip = await (prisma as any).trip.create({
-                    data: { busId: bus.id, routeId: routeId || null, status: 'STARTED', passedStops: [] }
-                });
+            // UPDATE: Teleport bus to starting point for a clean start
+            const startRoute = routeId ? await (prisma as any).route.findUnique({ where: { id: routeId } }) : bus.route;
+            if (startRoute) {
+                const startLat = isReverse ? startRoute.endLat : startRoute.startLat;
+                const startLng = isReverse ? startRoute.endLng : startRoute.startLng;
+                
+                if (startLat && startLng) {
+                    await (prisma.bus as any).update({
+                        where: { id: bus.id },
+                        data: { latitude: startLat, longitude: startLng }
+                    });
+                }
             }
 
-            socket.emit('trip_started', { ...trip, routeId: trip.routeId });
-            console.log(`🚀 Trip started for bus ${busNumber} on route ${routeId || 'default'}`);
+            const currentStartLat = isReverse ? (startRoute as any)?.endLat : (startRoute as any)?.startLat;
+            const currentStartLng = isReverse ? (startRoute as any)?.endLng : (startRoute as any)?.startLng;
+
+            socket.emit('trip_started', { 
+                ...trip, 
+                routeId: trip.routeId, 
+                isReverse: trip.isReverse,
+                latitude: currentStartLat ?? bus.latitude,
+                longitude: currentStartLng ?? bus.longitude
+            });
+            console.log(`🚀 Trip started for bus ${busNumber} on route ${routeId || 'default'} [${isReverse ? 'REVERSE' : 'NORMAL'}]`);
 
             io.to(busNumber).emit('trip_status_update', {
-                busId: busNumber, isTripActive: true, status: 'STARTED',
-                routeId: trip.routeId, timestamp: Date.now()
+                busId: busNumber,
+                isTripActive: true,
+                status: 'STARTED',
+                routeId: trip.routeId,
+                isReverse: trip.isReverse,
+                timestamp: Date.now()
             });
 
+            const tripLabel = isReverse ? 'Return Trip' : 'Trip';
             await notificationService.notifyBusStudents(
                 busNumber,
-                `Bus ${busNumber} Trip Started`,
-                `The driver has started the trip. You can now track your bus location in real-time.`,
-                { type: 'TRIP_STARTED' }
+                `Bus ${busNumber} ${tripLabel} Started`,
+                isReverse
+                    ? `The driver has started the return trip. Students will be dropped at their stops.`
+                    : `The driver has started the trip. You can now track your bus location in real-time.`,
+                { type: 'TRIP_STARTED', isReverse: String(isReverse) }
             );
         } catch (error: any) {
             console.error('❌ Error starting trip:', error.message);
@@ -539,15 +610,21 @@ io.on('connection', (socket) => {
                 // ── Geofence: driver must be within 1 km of route end point ──
                 if (trip.routeId && driverLat != null && driverLng != null) {
                     const route: any = await (prisma as any).route.findUnique({ where: { id: trip.routeId } });
-                    if (route?.endLat && route?.endLng) {
-                        const dist = haversineMetres(driverLat, driverLng, route.endLat, route.endLng);
-                        if (dist > 1000) {
-                            socket.emit('trip_end_error', {
-                                code: 'TOO_FAR_FROM_END',
-                                message: `You are ${Math.round(dist)}m from the destination. Move within 1km to end.`,
-                                distanceMetres: Math.round(dist)
-                            });
-                            return;
+                    if (route) {
+                        // If it's a return trip, the end point is the route's START point
+                        const targetLat = trip.isReverse ? route.startLat : route.endLat;
+                        const targetLng = trip.isReverse ? route.startLng : route.endLng;
+
+                        if (targetLat && targetLng) {
+                            const dist = haversineMetres(driverLat, driverLng, targetLat, targetLng);
+                            if (dist > 1000) {
+                                socket.emit('trip_end_error', {
+                                    code: 'TOO_FAR_FROM_END',
+                                    message: `You are ${Math.round(dist)}m from the ${trip.isReverse ? 'destination (route start)' : 'destination'}. Move within 1km to end.`,
+                                    distanceMetres: Math.round(dist)
+                                });
+                                return;
+                            }
                         }
                     }
                 }
@@ -638,7 +715,6 @@ io.on('connection', (socket) => {
         const { busNumber, stopName } = data;
         console.log(`🔍 Getting students for stop: "${stopName}" on bus: "${busNumber}"`);
         try {
-            // First check if the bus exists
             const bus = await prisma.bus.findUnique({ where: { busNumber: busNumber } });
             if (!bus) {
                 console.log(`⚠️ Bus "${busNumber}" not found in database!`);
@@ -646,6 +722,18 @@ io.on('connection', (socket) => {
                 return;
             }
 
+            // Determine if the active trip is a reverse trip so the client
+            // can show the correct UI label ("Drop-off" vs "Board").
+            const activeTrip: any = await (prisma as any).trip.findFirst({
+                where: { busId: bus.id, status: 'STARTED' },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+            });
+            const isReverse: boolean = activeTrip?.isReverse ?? false;
+
+            // In both normal and reverse trips, students are matched by pickupStop —
+            // it is their home stop. On a normal trip the bus picks them up there;
+            // on a reverse/return trip the bus drops them off there.
             const students = await prisma.student.findMany({
                 where: {
                     busId: bus.id,
@@ -655,11 +743,12 @@ io.on('connection', (socket) => {
                     }
                 }
             });
-            console.log(`✅ Found ${students.length} students for stop: "${stopName}" on bus: ${busNumber}`);
+            console.log(`✅ Found ${students.length} students for stop: "${stopName}" on bus: ${busNumber} [${isReverse ? 'DROP-OFF' : 'PICK-UP'}]`);
             if (students.length > 0) {
-                console.log(`📋 Students: ${students.map(s => s.name).join(', ')}`);
+                console.log(`📋 Students: ${students.map((s: any) => s.name).join(', ')}`);
             }
-            socket.emit('students_list', { stopName, students });
+            // Pass isReverse to the client so it can label the list correctly
+            socket.emit('students_list', { stopName, students, isReverse });
         } catch (error: any) {
             console.error('❌ Error getting students by stop:', error.message);
         }

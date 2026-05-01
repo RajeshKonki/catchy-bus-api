@@ -72,6 +72,8 @@ export class BulkService {
                     collegeName: s.college.name,
                     busNumber: s.bus?.busNumber || '',
                     pickupStop: s.pickupStop || '',
+                    department: s.department || '',
+                    year: s.year || '',
                     status: s.status,
                     profilePictureUrl: s.profilePictureUrl || ''
                 }));
@@ -129,8 +131,35 @@ export class BulkService {
             errors: [] as string[]
         };
 
+        let currentCollegeName: string | null = null;
+        if (collegeId) {
+            const college = await prisma.college.findUnique({ where: { id: collegeId } });
+            currentCollegeName = college?.name || null;
+        }
+
         for (const record of records) {
             try {
+                // Security Validation: Ensure College Admin only imports for their own college
+                if (collegeId && currentCollegeName && record.collegeName) {
+                    if (record.collegeName.trim().toLowerCase() !== currentCollegeName.toLowerCase()) {
+                        throw new Error(`Data validation failed: You cannot import data for "${record.collegeName}". This record belongs to another college.`);
+                    }
+                }
+
+                // Field Validation
+                if (module === 'students' && (!record.name || !record.phone)) {
+                    throw new Error('Name and Phone are required for students');
+                }
+                if (module === 'buses' && !record.busNumber) {
+                    throw new Error('Bus Number is required');
+                }
+                if (module === 'drivers' && (!record.name || !record.email || !record.phone)) {
+                    throw new Error('Name, Email and Phone are required for drivers');
+                }
+                if (module === 'routes' && (!record.name || !record.startPoint || !record.endPoint)) {
+                    throw new Error('Route Name, Start Point and End Point are required');
+                }
+
                 switch (module) {
                     case 'colleges':
                         await prisma.college.create({
@@ -175,6 +204,8 @@ export class BulkService {
                             collegeId: effectiveCollegeId,
                             busId: sBusId || null,
                             pickupStop: record.pickupStop || null,
+                            department: record.department || null,
+                            year: record.year || null,
                             profilePictureUrl: record.profilePictureUrl || record.imageUrl || null
                         };
 
@@ -374,6 +405,8 @@ export class BulkService {
                     collegeName: 'Example College',
                     busNumber: 'BUS-001',
                     pickupStop: 'Main Gate Stop',
+                    department: 'Computer Science',
+                    year: '3rd Year',
                     status: 'ACTIVE',
                     profilePictureUrl: 'https://example.com/rahul.jpg'
                 }]);

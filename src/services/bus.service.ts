@@ -53,6 +53,9 @@ export class BusService {
                             gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
                         }
                     },
+                    include: {
+                        route: true
+                    },
                     orderBy: { createdAt: 'desc' },
                     take: 1
                 }
@@ -65,46 +68,85 @@ export class BusService {
         if (bus.trips && bus.trips.length > 0) {
             const trip = bus.trips[0];
             const passedStops = (trip.passedStops as any[]) || [];
+            const activeRoute = trip.route || bus.route;
             
             if (passedStops.length > 0) {
                 const lastStop = passedStops[passedStops.length - 1];
                 bus.currentLocation = lastStop.name;
                 
                 // Find next stop if route exists
-                if (bus.route && Array.isArray(bus.route.stops)) {
-                    const stops = bus.route.stops as any[];
+                if (activeRoute && Array.isArray(activeRoute.stops)) {
+                    const stops = activeRoute.stops as any[];
+                    const isReverse = trip.isReverse === true;
                     const lastIndex = stops.findIndex(s => 
                         (typeof s === 'string' ? s : s.name) === lastStop.name
                     );
                     
-                    if (lastIndex !== -1 && lastIndex < stops.length - 1) {
-                        const next = stops[lastIndex + 1];
-                        bus.nextStop = typeof next === 'string' ? next : next.name;
-                    } else if (lastIndex === -1 && stops.length > 0) {
-                        // If not found in stops, maybe it was the start point
-                        if (lastStop.name === bus.route.startPoint) {
-                            const firstStop = stops[0];
-                            bus.nextStop = typeof firstStop === 'string' ? firstStop : firstStop.name;
+                    if (lastIndex !== -1) {
+                        if (isReverse) {
+                            if (lastIndex > 0) {
+                                const next = stops[lastIndex - 1];
+                                bus.nextStop = typeof next === 'string' ? next : next.name;
+                            } else {
+                                bus.nextStop = bus.route.startPoint || 'College Reached';
+                            }
                         } else {
-                            bus.nextStop = bus.route.endPoint;
+                            if (lastIndex < stops.length - 1) {
+                                const next = stops[lastIndex + 1];
+                                bus.nextStop = typeof next === 'string' ? next : next.name;
+                            } else {
+                                bus.nextStop = bus.route.endPoint || 'Terminus Reached';
+                            }
+                        }
+                    } else if (lastIndex === -1 && stops.length > 0) {
+                        if (isReverse) {
+                            if (lastStop.name === bus.route.endPoint) {
+                                const last = stops[stops.length - 1];
+                                bus.nextStop = typeof last === 'string' ? last : last.name;
+                            } else {
+                                bus.nextStop = bus.route.startPoint;
+                            }
+                        } else {
+                            if (lastStop.name === bus.route.startPoint) {
+                                const firstStop = stops[0];
+                                bus.nextStop = typeof firstStop === 'string' ? firstStop : firstStop.name;
+                            } else {
+                                bus.nextStop = activeRoute.endPoint;
+                            }
                         }
                     } else {
-                        bus.nextStop = 'Terminus Reached';
+                        bus.nextStop = isReverse ? 'College Reached' : 'Terminus Reached';
                     }
                 }
             } else {
-                bus.currentLocation = bus.route?.startPoint || 'At College';
-                if (bus.route && Array.isArray(bus.route.stops) && bus.route.stops.length > 0) {
-                    const first = bus.route.stops[0];
-                    bus.nextStop = typeof first === 'string' ? first : first.name;
+                const isReverse = trip.isReverse === true;
+                if (isReverse) {
+                    bus.currentLocation = activeRoute?.endPoint || 'At Return Start';
+                    if (activeRoute && Array.isArray(activeRoute.stops) && activeRoute.stops.length > 0) {
+                        const last = activeRoute.stops[activeRoute.stops.length - 1];
+                        bus.nextStop = typeof last === 'string' ? last : last.name;
+                    } else {
+                        bus.nextStop = activeRoute?.startPoint || 'College';
+                    }
                 } else {
-                    bus.nextStop = bus.route?.endPoint || 'Final Stop';
+                    bus.currentLocation = activeRoute?.startPoint || 'At College';
+                    if (activeRoute && Array.isArray(activeRoute.stops) && activeRoute.stops.length > 0) {
+                        const first = activeRoute.stops[0];
+                        bus.nextStop = typeof first === 'string' ? first : first.name;
+                    } else {
+                        bus.nextStop = activeRoute?.endPoint || 'Final Stop';
+                    }
                 }
             }
         } else {
             bus.currentLocation = 'Inactive';
             bus.nextStop = 'Trip not started';
         }
+
+        // Add top-level flags for client convenience
+        const activeTrip = bus.trips && bus.trips.length > 0 ? bus.trips[0] : null;
+        bus.isTripActive = !!activeTrip;
+        bus.isReverse = activeTrip ? activeTrip.isReverse === true : false;
 
         return bus;
     }

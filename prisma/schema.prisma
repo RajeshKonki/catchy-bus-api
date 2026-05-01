@@ -40,6 +40,7 @@ model College {
   drivers           Driver[]
   routes            Route[]
   students          Student[]
+  banners           Banner[]
 }
 
 model Route {
@@ -86,6 +87,9 @@ model Bus {
   collegeId   String
   routeId     String?
   imageUrl    String?
+  latitude    Float?
+  longitude   Float?
+  bearing     Float?    @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   description String?
@@ -106,6 +110,7 @@ model Trip {
   startTime   DateTime  @default(now())
   endTime     DateTime?
   passedStops Json?
+  isReverse   Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   bus         Bus       @relation(fields: [busId], references: [id])
@@ -158,6 +163,8 @@ model Student {
   fcmToken             String?
   notificationSettings Json?
   studentId            String?
+  department           String?
+  year                 String?
   attendances          Attendance[]
   notifications        Notification[]
   bus                  Bus?           @relation(fields: [busId], references: [id])
@@ -202,8 +209,10 @@ model Banner {
   link      String?
   status    Status   @default(ACTIVE)
   order     Int      @default(0)
+  collegeId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  college   College? @relation(fields: [collegeId], references: [id])
 }
 
 enum Status {
