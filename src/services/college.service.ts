@@ -147,8 +147,74 @@ export class CollegeService {
     }
 
     async deleteCollege(id: string) {
-        return await prisma.college.delete({
-            where: { id }
+        return await prisma.$transaction(async (tx) => {
+            // 1. Delete all Attendances for students of this college
+            await tx.attendance.deleteMany({
+                where: { student: { collegeId: id } }
+            });
+
+            // 2. Delete all Notifications for students of this college
+            await tx.notification.deleteMany({
+                where: { student: { collegeId: id } }
+            });
+
+            // 3. Delete all Students of this college
+            await tx.student.deleteMany({
+                where: { collegeId: id }
+            });
+
+            // 4. Delete all DriverRoutes for drivers of this college
+            await tx.driverRoute.deleteMany({
+                where: { driver: { collegeId: id } }
+            });
+
+            // 5. Delete all Drivers of this college
+            await tx.driver.deleteMany({
+                where: { collegeId: id }
+            });
+
+            // 6. Delete all Trips for buses of this college
+            await tx.trip.deleteMany({
+                where: { bus: { collegeId: id } }
+            });
+
+            // 7. Delete all BusRoutes for buses of this college
+            await tx.busRoute.deleteMany({
+                where: { bus: { collegeId: id } }
+            });
+
+            // 8. Delete all Buses of this college
+            await tx.bus.deleteMany({
+                where: { collegeId: id }
+            });
+
+            // 9. Delete all DriverRoutes and BusRoutes for routes of this college (already handled above, but good for completeness)
+            await tx.driverRoute.deleteMany({
+                where: { route: { collegeId: id } }
+            });
+            await tx.busRoute.deleteMany({
+                where: { route: { collegeId: id } }
+            });
+
+            // 10. Delete all Trips for routes of this college (already handled above, but good for completeness)
+            await tx.trip.deleteMany({
+                where: { route: { collegeId: id } }
+            });
+
+            // 11. Delete all Routes of this college
+            await tx.route.deleteMany({
+                where: { collegeId: id }
+            });
+
+            // 12. Delete all Banners of this college
+            await tx.banner.deleteMany({
+                where: { collegeId: id }
+            });
+
+            // 13. Finally, delete the college itself
+            return await tx.college.delete({
+                where: { id }
+            });
         });
     }
 }

@@ -210,6 +210,7 @@ export class AuthService {
                 studentId: primaryStudent.studentId || '',
                 department: (primaryStudent as any).department || '',
                 year: (primaryStudent as any).year || '',
+                status: primaryStudent.status,
                 isMultiAccount: students.length > 1,
                 accounts: students.map(s => ({
                     id: s.id,
@@ -223,7 +224,8 @@ export class AuthService {
                     department: (s as any).department || '',
                     year: (s as any).year || '',
                     profilePictureUrl: s.profilePictureUrl || '',
-                    collegeImageUrl: s.college?.imageUrl || ''
+                    collegeImageUrl: s.college?.imageUrl || '',
+                    status: s.status
                 }))
             }
         };
@@ -312,6 +314,7 @@ export class AuthService {
                     year: (student as any).year || '',
                     profilePictureUrl: student.profilePictureUrl || '',
                     collegeImageUrl: student.college?.imageUrl || '',
+                    status: student.status,
                     isMultiAccount: allStudents.length > 1,
                     accounts: allStudents.map(s => ({
                         id: s.id,
@@ -325,7 +328,8 @@ export class AuthService {
                         department: (s as any).department || '',
                         year: (s as any).year || '',
                         profilePictureUrl: s.profilePictureUrl || '',
-                        collegeImageUrl: s.college?.imageUrl || ''
+                        collegeImageUrl: s.college?.imageUrl || '',
+                        status: s.status
                     }))
                 };
             }

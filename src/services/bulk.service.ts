@@ -91,11 +91,13 @@ export class BulkService {
                     startPoint: r.startPoint,
                     startAddress: r.startAddress || '',
                     departureTime: r.startTime || '',
+                    reverseDepartureTime: r.reverseStartTime || '',
                     startLat: r.startLat,
                     startLng: r.startLng,
                     endPoint: r.endPoint,
                     endAddress: r.endAddress || '',
                     arrivalTime: r.endTime || '',
+                    reverseArrivalTime: r.reverseEndTime || '',
                     endLat: r.endLat,
                     endLng: r.endLng,
                     distance: r.distance,
@@ -105,9 +107,18 @@ export class BulkService {
                         if (typeof s === 'string') return s;
                         const lat = s.latitude || s.lat || '';
                         const lng = s.longitude || s.lng || '';
+                        const rLat = s.reverseLat || '';
+                        const rLng = s.reverseLng || '';
+                        let coordsPart = `${lat},${lng}`;
+                        if (rLat && rLng) coordsPart += `;${rLat},${rLng}`;
+
                         const time = s.expectedTime || s.arrivalTime || '';
+                        const rTime = s.reverseExpectedTime || s.reverseArrivalTime || '';
+                        let timePart = time;
+                        if (rTime) timePart += `;${rTime}`;
+
                         const addr = s.address || '';
-                        return `${s.name || ''}:${lat},${lng}${addr ? '#' + addr : ''}${time ? '@' + time : ''}`;
+                        return `${s.name || ''}:${coordsPart}${addr ? '#' + addr : ''}${timePart ? '@' + timePart : ''}`;
                     }).join(' | ') : ''
                 }));
                 break;
@@ -325,7 +336,9 @@ export class BulkService {
                             endLat: record.endLat ? parseFloat(record.endLat) : null,
                             endLng: record.endLng ? parseFloat(record.endLng) : null,
                             startTime: record.departureTime || record.startTime || null,
+                            reverseStartTime: record.reverseDepartureTime || record.reverseStartTime || null,
                             endTime: record.arrivalTime || record.endTime || null,
+                            reverseEndTime: record.reverseArrivalTime || record.reverseEndTime || null,
                             distance: record.distance ? parseFloat(record.distance) : null,
                             duration: record.duration ? parseInt(record.duration) : null,
                             status: record.status ? (record.status.toUpperCase() === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') : 'ACTIVE',
@@ -333,13 +346,17 @@ export class BulkService {
                             stops: record.stops ? record.stops.split('|').map((s: string) => {
                                 const trimmed = s.trim();
                                 let namePart = trimmed;
-                                let time = null;
+                                let expectedTime = null;
+                                let reverseExpectedTime = null;
                                 let address = null;
+                                let lat = null, lng = null, revLat = null, revLng = null;
 
                                 if (trimmed.includes('@')) {
                                     const parts = trimmed.split('@');
                                     namePart = parts[0].trim();
-                                    time = parts[1].trim();
+                                    const times = parts[1].trim().split(';');
+                                    expectedTime = times[0]?.trim() || null;
+                                    reverseExpectedTime = times[1]?.trim() || null;
                                 }
 
                                 if (namePart.includes('#')) {
@@ -349,17 +366,30 @@ export class BulkService {
                                 }
 
                                 if (namePart.includes(':')) {
-                                    const [name, coords] = namePart.split(':');
-                                    const [lat, lng] = coords.split(',');
-                                    return {
-                                        name: name.trim(),
-                                        latitude: parseFloat(lat),
-                                        longitude: parseFloat(lng),
-                                        address: address,
-                                        expectedTime: time
-                                    };
+                                    const [name, coordsPart] = namePart.split(':');
+                                    namePart = name.trim();
+                                    const coords = coordsPart.split(';');
+                                    if (coords[0]) {
+                                        const [fl, flg] = coords[0].split(',');
+                                        if (fl && flg) {
+                                            lat = parseFloat(fl); lng = parseFloat(flg);
+                                        }
+                                    }
+                                    if (coords[1]) {
+                                        const [rl, rlg] = coords[1].split(',');
+                                        if (rl && rlg) {
+                                            revLat = parseFloat(rl); revLng = parseFloat(rlg);
+                                        }
+                                    }
                                 }
-                                return { name: namePart, address: address, expectedTime: time };
+
+                                return { 
+                                    name: namePart, 
+                                    address: address, 
+                                    latitude: lat, longitude: lng, 
+                                    reverseLat: revLat, reverseLng: revLng, 
+                                    expectedTime: expectedTime, reverseExpectedTime: reverseExpectedTime 
+                                };
                             }) : []
                         };
 
@@ -439,17 +469,19 @@ export class BulkService {
                         startPoint: 'Majestic Bus Stand',
                         startAddress: 'Majestic, Bangalore, Karnataka',
                         departureTime: '08:00',
+                        reverseDepartureTime: '17:00',
                         startLat: 12.9716,
                         startLng: 77.5946,
                         endPoint: 'BIT Campus',
                         endAddress: 'BIT Campus, Kengeri, Bangalore',
                         arrivalTime: '09:00',
+                        reverseArrivalTime: '16:00',
                         endLat: 12.9081,
                         endLng: 77.5023,
                         collegeName: 'Example College',
                         distance: 12.5,
                         duration: 60,
-                        stops: 'Stop A:12.95,77.55#Old Airport Road@08:15 | Stop B:12.92,77.52#Kengeri Satellite Town@08:45',
+                        stops: 'Stop A:12.95,77.55;12.951,77.551#Old Airport Road@08:15;16:45 | Stop B:12.92,77.52#Kengeri Satellite Town@08:45',
                         status: 'ACTIVE'
                     },
                     {
@@ -457,11 +489,13 @@ export class BulkService {
                         startPoint: 'Adyar Bus Stand',
                         startAddress: 'Adyar, Chennai, Tamil Nadu',
                         departureTime: '07:30',
+                        reverseDepartureTime: '',
                         startLat: 13.0067,
                         startLng: 80.2506,
                         endPoint: 'VIT Campus',
                         endAddress: 'VIT Campus, Kelambakkam, Chennai',
                         arrivalTime: '08:45',
+                        reverseArrivalTime: '',
                         endLat: 12.8396,
                         endLng: 80.1264,
                         collegeName: 'Example College',

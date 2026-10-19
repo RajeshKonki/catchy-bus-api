@@ -61,8 +61,10 @@ model Route {
   startAddress String?
   startLat     Float?
   startLng     Float?
-  endTime      String?
-  startTime    String?
+  endTime          String?
+  startTime        String?
+  reverseStartTime String?
+  reverseEndTime   String?
   buses        Bus[]
   trips        Trip[]
   driverRoutes DriverRoute[]

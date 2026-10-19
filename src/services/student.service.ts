@@ -99,6 +99,10 @@ export class StudentService {
 
 
     async deleteStudent(id: string) {
-        return await prisma.student.delete({ where: { id } });
+        return await prisma.$transaction(async (tx) => {
+            await tx.notification.deleteMany({ where: { studentId: id } });
+            await tx.attendance.deleteMany({ where: { studentId: id } });
+            return await tx.student.delete({ where: { id } });
+        });
     }
 }

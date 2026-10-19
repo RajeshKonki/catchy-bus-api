@@ -48,105 +48,168 @@ export class BusService {
                 },
                 trips: {
                     where: {
-                        status: 'STARTED',
                         startTime: {
-                            gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+                            gte: new Date(Date.now() - 12 * 60 * 60 * 1000)
                         }
                     },
                     include: {
                         route: true
                     },
                     orderBy: { createdAt: 'desc' },
-                    take: 1
+                    take: 10
                 }
             }
         }) as any;
 
         if (!bus) return null;
 
+        const activeTrip = bus.trips ? bus.trips.find((t: any) => t.status === 'STARTED') : null;
+        const latestTrip = activeTrip || (bus.trips && bus.trips.length > 0 ? bus.trips[0] : null);
+
         // Derive currentLocation and nextStop from active trip
-        if (bus.trips && bus.trips.length > 0) {
-            const trip = bus.trips[0];
+        if (latestTrip && latestTrip.status === 'STARTED') {
+            const trip = latestTrip;
             const passedStops = (trip.passedStops as any[]) || [];
             const activeRoute = trip.route || bus.route;
-            
+            const routeStops = (activeRoute?.stops as any[]) || [];
+
+            let derivedLocation = 'In Transit';
+            let derivedNext = 'Calculating...';
+
             if (passedStops.length > 0) {
                 const lastStop = passedStops[passedStops.length - 1];
-                bus.currentLocation = lastStop.name;
+                derivedLocation = lastStop.name;
                 
-                // Find next stop if route exists
-                if (activeRoute && Array.isArray(activeRoute.stops)) {
-                    const stops = activeRoute.stops as any[];
-                    const isReverse = trip.isReverse === true;
-                    const lastIndex = stops.findIndex(s => 
-                        (typeof s === 'string' ? s : s.name) === lastStop.name
-                    );
-                    
-                    if (lastIndex !== -1) {
-                        if (isReverse) {
-                            if (lastIndex > 0) {
-                                const next = stops[lastIndex - 1];
-                                bus.nextStop = typeof next === 'string' ? next : next.name;
-                            } else {
-                                bus.nextStop = bus.route.startPoint || 'College Reached';
-                            }
+                const lastIndex = routeStops.findIndex(s => 
+                    (typeof s === 'string' ? s : s.name) === lastStop.name
+                );
+                
+                if (lastIndex !== -1) {
+                    if (trip.isReverse) {
+                        if (lastIndex > 0) {
+                            const next = routeStops[lastIndex - 1];
+                            derivedNext = typeof next === 'string' ? next : next.name;
                         } else {
-                            if (lastIndex < stops.length - 1) {
-                                const next = stops[lastIndex + 1];
-                                bus.nextStop = typeof next === 'string' ? next : next.name;
-                            } else {
-                                bus.nextStop = bus.route.endPoint || 'Terminus Reached';
-                            }
-                        }
-                    } else if (lastIndex === -1 && stops.length > 0) {
-                        if (isReverse) {
-                            if (lastStop.name === bus.route.endPoint) {
-                                const last = stops[stops.length - 1];
-                                bus.nextStop = typeof last === 'string' ? last : last.name;
-                            } else {
-                                bus.nextStop = bus.route.startPoint;
-                            }
-                        } else {
-                            if (lastStop.name === bus.route.startPoint) {
-                                const firstStop = stops[0];
-                                bus.nextStop = typeof firstStop === 'string' ? firstStop : firstStop.name;
-                            } else {
-                                bus.nextStop = activeRoute.endPoint;
-                            }
+                            derivedNext = activeRoute.startPoint || 'College Reached';
                         }
                     } else {
-                        bus.nextStop = isReverse ? 'College Reached' : 'Terminus Reached';
+                        if (lastIndex < routeStops.length - 1) {
+                            const next = routeStops[lastIndex + 1];
+                            derivedNext = typeof next === 'string' ? next : next.name;
+                        } else {
+                            derivedNext = activeRoute.endPoint || 'Terminus Reached';
+                        }
                     }
                 }
             } else {
-                const isReverse = trip.isReverse === true;
-                if (isReverse) {
-                    bus.currentLocation = activeRoute?.endPoint || 'At Return Start';
-                    if (activeRoute && Array.isArray(activeRoute.stops) && activeRoute.stops.length > 0) {
-                        const last = activeRoute.stops[activeRoute.stops.length - 1];
-                        bus.nextStop = typeof last === 'string' ? last : last.name;
-                    } else {
-                        bus.nextStop = activeRoute?.startPoint || 'College';
+                derivedLocation = trip.isReverse
+                    ? (activeRoute?.endPoint || 'Starting Point (Return)')
+                    : (activeRoute?.startPoint || 'Starting Point');
+                if (routeStops.length > 0) {
+                    const next = trip.isReverse ? routeStops[routeStops.length - 1] : routeStops[0];
+                    derivedNext = typeof next === 'string' ? next : next.name;
+                }
+            }
+
+            // Proximity check if lat/lng are available
+            if (bus.latitude != null && bus.longitude != null) {
+                const travelStops: { name: string; lat: number; lng: number; isStartEnd: boolean }[] = [];
+                if (trip.isReverse) {
+                    if (activeRoute?.endPoint) {
+                        travelStops.push({
+                            name: activeRoute.endPoint,
+                            lat: activeRoute.endLat || 0,
+                            lng: activeRoute.endLng || 0,
+                            isStartEnd: true
+                        });
+                    }
+                    for (let i = routeStops.length - 1; i >= 0; i--) {
+                        const s = routeStops[i];
+                        travelStops.push({
+                            name: typeof s === 'string' ? s : s.name,
+                            lat: typeof s === 'string' ? 0 : (s.reverseLat || s.lat || s.latitude || 0),
+                            lng: typeof s === 'string' ? 0 : (s.reverseLng || s.lng || s.longitude || 0),
+                            isStartEnd: false
+                        });
+                    }
+                    if (activeRoute?.startPoint) {
+                        travelStops.push({
+                            name: activeRoute.startPoint,
+                            lat: activeRoute.startLat || 0,
+                            lng: activeRoute.startLng || 0,
+                            isStartEnd: true
+                        });
                     }
                 } else {
-                    bus.currentLocation = activeRoute?.startPoint || 'At College';
-                    if (activeRoute && Array.isArray(activeRoute.stops) && activeRoute.stops.length > 0) {
-                        const first = activeRoute.stops[0];
-                        bus.nextStop = typeof first === 'string' ? first : first.name;
+                    if (activeRoute?.startPoint) {
+                        travelStops.push({
+                            name: activeRoute.startPoint,
+                            lat: activeRoute.startLat || 0,
+                            lng: activeRoute.startLng || 0,
+                            isStartEnd: true
+                        });
+                    }
+                    for (const s of routeStops) {
+                        travelStops.push({
+                            name: typeof s === 'string' ? s : s.name,
+                            lat: typeof s === 'string' ? 0 : (s.lat || s.latitude || 0),
+                            lng: typeof s === 'string' ? 0 : (s.lng || s.longitude || 0),
+                            isStartEnd: false
+                        });
+                    }
+                    if (activeRoute?.endPoint) {
+                        travelStops.push({
+                            name: activeRoute.endPoint,
+                            lat: activeRoute.endLat || 0,
+                            lng: activeRoute.endLng || 0,
+                            isStartEnd: true
+                        });
+                    }
+                }
+
+                let closestStop = null;
+                let closestStopIdx = -1;
+                let minDistance = Infinity;
+
+                for (let i = 0; i < travelStops.length; i++) {
+                    const stop = travelStops[i];
+                    if (stop.lat && stop.lng) {
+                        const distance = getDistance(bus.latitude, bus.longitude, stop.lat, stop.lng);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestStop = stop.name;
+                            closestStopIdx = i;
+                        }
+                    }
+                }
+
+                if (closestStopIdx !== -1) {
+                    if (closestStopIdx < travelStops.length - 1) {
+                        derivedNext = travelStops[closestStopIdx + 1].name;
                     } else {
-                        bus.nextStop = activeRoute?.endPoint || 'Final Stop';
+                        derivedNext = trip.isReverse ? 'Depot Reached' : 'Terminus Reached';
+                    }
+
+                    if (minDistance > 3.0) {
+                        derivedLocation = 'Route Diverted (Off Route)';
+                    } else if (minDistance < 0.2) {
+                        derivedLocation = closestStop!;
+                    } else {
+                        derivedLocation = `In Transit (to ${derivedNext})`;
                     }
                 }
             }
+
+            bus.currentLocation = derivedLocation;
+            bus.nextStop = derivedNext;
         } else {
             bus.currentLocation = 'Inactive';
             bus.nextStop = 'Trip not started';
         }
 
         // Add top-level flags for client convenience
-        const activeTrip = bus.trips && bus.trips.length > 0 ? bus.trips[0] : null;
-        bus.isTripActive = !!activeTrip;
-        bus.isReverse = activeTrip ? activeTrip.isReverse === true : false;
+        bus.isTripActive = latestTrip ? latestTrip.status === 'STARTED' : false;
+        bus.isReverse = latestTrip ? latestTrip.isReverse === true : false;
 
         return bus;
     }
@@ -234,8 +297,45 @@ export class BusService {
     }
 
     async deleteBus(id: string) {
-        return await prisma.bus.delete({
-            where: { id }
+        return await prisma.$transaction(async (tx) => {
+            // 1. Delete trips associated with this bus
+            await tx.trip.deleteMany({
+                where: { busId: id }
+            });
+
+            // 2. Unlink bus from drivers
+            await tx.driver.updateMany({
+                where: { busId: id },
+                data: { busId: null }
+            });
+
+            // 3. Unlink bus from students
+            await tx.student.updateMany({
+                where: { busId: id },
+                data: { busId: null }
+            });
+
+            // 4. Delete busRoutes pointing to this bus
+            await tx.busRoute.deleteMany({
+                where: { busId: id }
+            });
+
+            // 5. Delete the bus itself
+            return await tx.bus.delete({
+                where: { id }
+            });
         });
     }
+}
+
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
 }

@@ -44,18 +44,47 @@ export class RouteService {
         const {
             name, startPoint, startAddress, startLat, startLng,
             endPoint, endAddress, endLat, endLng,
-            distance, duration, stops, status, collegeId, startTime, endTime
+            distance, duration, stops, status, collegeId, startTime, endTime,
+            reverseStartTime, reverseEndTime
         } = data;
 
         return {
             name, startPoint, startAddress, startLat, startLng,
             endPoint, endAddress, endLat, endLng,
-            distance, duration, stops, status, collegeId, startTime, endTime
+            distance, duration, stops, status, collegeId, startTime, endTime,
+            reverseStartTime, reverseEndTime
         };
     }
 
     async deleteRoute(id: string) {
-        return await prisma.route.delete({ where: { id } });
+        return await prisma.$transaction(async (tx) => {
+            // 1. Unlink route from buses
+            await tx.bus.updateMany({
+                where: { routeId: id },
+                data: { routeId: null }
+            });
+
+            // 2. Unlink route from trips
+            await tx.trip.updateMany({
+                where: { routeId: id },
+                data: { routeId: null }
+            });
+
+            // 3. Delete driverRoutes pointing to this route
+            await tx.driverRoute.deleteMany({
+                where: { routeId: id }
+            });
+
+            // 4. Delete busRoutes pointing to this route
+            await tx.busRoute.deleteMany({
+                where: { routeId: id }
+            });
+
+            // 5. Delete the route itself
+            return await tx.route.delete({
+                where: { id }
+            });
+        });
     }
 
     async getUniqueStopsByCollege(collegeId: string) {

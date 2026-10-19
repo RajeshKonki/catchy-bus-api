@@ -16,28 +16,43 @@ export class NotificationService {
             });
         }
 
+        const type = data?.type;
+        const isAlarmType = type === 'PROXIMITY_1KM' || type === 'APPROACHING' || type === 'STOP_REACHED';
+
         const message: admin.messaging.MulticastMessage = {
             tokens: tokens.filter(t => t && t.length > 0),
-            notification: {
+            data: {
                 title,
                 body,
+                ...stringData
             },
-            data: stringData,
             android: {
                 priority: 'high',
-                notification: {
-                    sound: 'default',
-                    channelId: 'bus_updates'
-                }
+                ...(!isAlarmType && {
+                    notification: {
+                        sound: 'default',
+                        channelId: 'bus_updates'
+                    }
+                })
             },
             apns: {
                 payload: {
                     aps: {
-                        sound: 'default'
+                        sound: 'default',
+                        ...(isAlarmType && {
+                            contentAvailable: true
+                        })
                     }
                 }
             }
         };
+
+        if (!isAlarmType) {
+            message.notification = {
+                title,
+                body,
+            };
+        }
 
         try {
             const response = await admin.messaging().sendEachForMulticast(message);
@@ -114,7 +129,8 @@ export class NotificationService {
                     body,
                     studentId: student.id,
                     phoneNumber: student.phone, // Store phone number for filtering
-                    data: { busNumber: busIdentifier, ...actionData }
+                    data: { busNumber: busIdentifier, ...actionData },
+                    updatedAt: new Date()
                 }))
             });
 
@@ -131,6 +147,94 @@ export class NotificationService {
             }
         } catch (error) {
             console.error('[Notification] Error notifying bus students:', error);
+        }
+    }
+
+    /**
+     * Notify students on a bus who did not have their attendance marked during a trip
+     */
+    async notifyUnmarkedAttendance(busIdentifier: string, tripId: string) {
+        try {
+            // Find bus and its students
+            let bus = await (prisma as any).bus.findUnique({
+                where: { busNumber: busIdentifier },
+                include: { students: true }
+            });
+
+            if (!bus) {
+                bus = await (prisma as any).bus.findUnique({
+                    where: { id: busIdentifier },
+                    include: { students: true }
+                });
+            }
+
+            if (!bus || !bus.students || bus.students.length === 0) {
+                console.log(`[Notification] No students found on bus ${busIdentifier} to check attendance.`);
+                return;
+            }
+
+            // Find the trip
+            const trip = await (prisma as any).trip.findUnique({
+                where: { id: tripId },
+                include: { route: true }
+            });
+
+            if (!trip) {
+                console.log(`[Notification] Trip ${tripId} not found.`);
+                return;
+            }
+
+            // Extract all student IDs who had their attendance marked
+            const passedStops = (trip.passedStops as any[]) || [];
+            const markedStudentIds = new Set<string>();
+            for (const stop of passedStops) {
+                if (stop.studentIds && Array.isArray(stop.studentIds)) {
+                    for (const id of stop.studentIds) {
+                        markedStudentIds.add(id);
+                    }
+                }
+            }
+
+            // Unmarked students
+            const unmarkedStudents = bus.students.filter((student: any) => !markedStudentIds.has(student.id));
+
+            if (unmarkedStudents.length === 0) {
+                console.log(`[Notification] All students were marked present for trip ${tripId}.`);
+                return;
+            }
+
+            const routeName = trip.route ? trip.route.name : 'your route';
+            const title = 'Attendance Not Marked';
+            const body = `Your attendance was not marked for the trip on route "${routeName}" (Bus ${bus.busNumber}).`;
+
+            // 1. Store in DB for each student
+            await (prisma as any).notification.createMany({
+                data: unmarkedStudents.map((student: any) => ({
+                    title,
+                    body,
+                    studentId: student.id,
+                    phoneNumber: student.phone,
+                    data: { busNumber: bus.busNumber, type: 'ATTENDANCE_NOT_MARKED', tripId },
+                    updatedAt: new Date()
+                }))
+            });
+
+            // 2. Send push notifications
+            const tokens = unmarkedStudents
+                .map((s: any) => s.fcmToken)
+                .filter((t: string | null): t is string => !!t);
+
+            if (tokens.length > 0) {
+                await this.sendPushNotification(tokens, title, body, {
+                    busNumber: bus.busNumber,
+                    type: 'ATTENDANCE_NOT_MARKED',
+                    tripId
+                });
+            }
+
+            console.log(`[Notification] Sent unmarked attendance notification to ${unmarkedStudents.length} students on bus ${bus.busNumber}.`);
+        } catch (error) {
+            console.error('[Notification] Error notifying unmarked attendance:', error);
         }
     }
 }

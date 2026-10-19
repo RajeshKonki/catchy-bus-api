@@ -80,6 +80,16 @@ export class DriverService {
     }
 
     async deleteDriver(id: string) {
-        return await prisma.driver.delete({ where: { id } });
+        return await prisma.$transaction(async (tx) => {
+            // Delete associated driverRoutes
+            await tx.driverRoute.deleteMany({
+                where: { driverId: id }
+            });
+
+            // Delete the driver itself
+            return await tx.driver.delete({
+                where: { id }
+            });
+        });
     }
 }

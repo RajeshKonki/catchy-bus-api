@@ -7,14 +7,8 @@ async function main() {
     const admins = [
         {
             email: 'admin@catchybus.com',
-            password: 'Rajesh@123',
+            password: 'Catchy@2026',
             fullName: 'Super Admin',
-            role: 'superadmin'
-        },
-        {
-            email: 'shaiktowsiq@gmail.com',
-            password: 'Admin@123',
-            fullName: 'Towsiq Super Admin',
             role: 'superadmin'
         }
     ];
